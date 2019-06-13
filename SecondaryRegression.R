@@ -9,6 +9,7 @@ library(abind)
 ##Load and derive information from JSON
 args<- commandArgs(TRUE)
 json<-args[1]
+groupID<-args[2]
 #jsondf<-fromJSON("./sample.json")
 jsondf<-fromJSON(json)
 compounds<-jsondf$compounds
@@ -49,7 +50,7 @@ outliercheck<- function(replicates, outliers){
 }
 data_replicates_checked<-outliercheck(data_replicates, data_outliers)
 #With outliers set as NA, bind the compound number to the first column in each plate
-data_replicates_cmpd<-abind(array(compounds, replace(dim(replicates),2,1)), 
+data_replicates_cmpd<-abind(array(compounds, replace(dim(data_replicates_checked),2,1)), 
                        data_replicates_checked, along = 2)
 #Arrange the data into a single 2D array depeding on 3D-ness of original array
 data_replicates<-data_replicates_cmpd[,,1]
@@ -122,7 +123,7 @@ residFun<- function(p, observed, xx) {
   observed - getPred(p,xx)
 }
 nls.out<- nls.lm(paramslist, fn = residFun, observed = Yavg, xx = Xavg)
-summary(nls.out)
+#summary(nls.out)
 #Separate all data
 getPredsingle<- function(params, xx) {
   (params$Bottom) + ((params$Top-params$Bottom)/
@@ -144,7 +145,7 @@ for(i in 1:length(compounds)){
   output_assembly[[i]][["Pred Y-Value"]]<-output[[i]]
 }
 jsonoutput<-toJSON(output_assembly, pretty=TRUE, auto_unbox = TRUE)
-cat(jsonoutput)
+ write(jsonoutput, paste0(paste0("/path/to/save/",groupID),".json"))
 #p<-ggplot(data.frame(x=x, y=Yavg), mapping = aes(Xavg, Yavg)) + 
   #geom_point()
 #for (i in 1:length(compounds)){
