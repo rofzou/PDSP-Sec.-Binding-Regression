@@ -149,9 +149,13 @@ finaloutput[[1]]<-c(compounds)
 finaloutput[[2]]<-as.vector(unlist(sapply(output_assembly,"[","logKi"),use.names = FALSE))
 finaloutput[[3]]<-output_assembly[[1]][["Top"]]
 finaloutput[[4]]<-output_assembly[[1]][["Bottom"]]
-finaloutput[[5]]<-sapply(output_assembly,"[","Pred Y-Value")
+predictedyvalues<-sapply(output_assembly,"[","Pred Y-Value")
 for(i in 1:length(compounds)){
-  finaloutput[[6]][[i]]<-c(concentrations[i,])
+  finaloutput[[5]][[i]]<-as.numeric(unlist(df[[i]]))
+}
+#finaloutput[[5]]<-as.numeric(sapply(output_assembly,"[","Pred Y-Value"))
+for(i in 1:length(compounds)){
+  finaloutput[[6]][[i]]<-as.vector(as.numeric(concentrations[i,]))
 }
 names(finaloutput)<-c("Compounds", "logKi","Top","Bottom","Y-Values","X-values")
 #jsonoutput<-toJSON(output_assembly, pretty=TRUE, auto_unbox = TRUE)
