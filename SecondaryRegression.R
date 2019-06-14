@@ -144,8 +144,17 @@ spl_fxns[[i]] <- splinefun(concentrations[i,], output[[i]])
 for(i in 1:length(compounds)){
   output_assembly[[i]][["Pred Y-Value"]]<-output[[i]]
 }
-jsonoutput<-toJSON(output_assembly, pretty=TRUE, auto_unbox = TRUE)
- write(jsonoutput, paste0(paste0("/path/to/save/",groupID),".json"))
+finaloutput<-list()
+finaloutput[[1]]<-c(compounds)
+finaloutput[[2]]<-as.vector(unlist(sapply(output_assembly,"[","logKi"),use.names = FALSE))
+finaloutput[[3]]<-output_assembly[[1]][["Top"]]
+finaloutput[[4]]<-output_assembly[[1]][["Bottom"]]
+finaloutput[[5]]<-as.vector(unlist(sapply(output_assembly,"[","Pred Y-Value"),use.names = FALSE))
+finaloutput[[6]]<-c(Xavg)
+names(finaloutput)<-c("Compounds", "logKi","Top","Bottom","Y-Values","X-values")
+#jsonoutput<-toJSON(output_assembly, pretty=TRUE, auto_unbox = TRUE)
+jsonoutput<-toJSON(finaloutput, pretty=TRUE, auto_unbox = TRUE)
+write(jsonoutput, paste0(paste0("/path/to/save/",groupID),".json"))
 #p<-ggplot(data.frame(x=x, y=Yavg), mapping = aes(Xavg, Yavg)) + 
   #geom_point()
 #for (i in 1:length(compounds)){
