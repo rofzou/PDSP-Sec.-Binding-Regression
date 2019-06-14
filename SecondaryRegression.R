@@ -144,13 +144,15 @@ spl_fxns[[i]] <- splinefun(concentrations[i,], output[[i]])
 for(i in 1:length(compounds)){
   output_assembly[[i]][["Pred Y-Value"]]<-output[[i]]
 }
-finaloutput<-list()
+finaloutput<-vector("list",6)
 finaloutput[[1]]<-c(compounds)
 finaloutput[[2]]<-as.vector(unlist(sapply(output_assembly,"[","logKi"),use.names = FALSE))
 finaloutput[[3]]<-output_assembly[[1]][["Top"]]
 finaloutput[[4]]<-output_assembly[[1]][["Bottom"]]
-finaloutput[[5]]<-as.vector(unlist(sapply(output_assembly,"[","Pred Y-Value"),use.names = FALSE))
-finaloutput[[6]]<-c(Xavg)
+finaloutput[[5]]<-sapply(output_assembly,"[","Pred Y-Value")
+for(i in 1:length(compounds)){
+  finaloutput[[6]][[i]]<-c(concentrations[i,])
+}
 names(finaloutput)<-c("Compounds", "logKi","Top","Bottom","Y-Values","X-values")
 #jsonoutput<-toJSON(output_assembly, pretty=TRUE, auto_unbox = TRUE)
 jsonoutput<-toJSON(finaloutput, pretty=TRUE, auto_unbox = TRUE)
