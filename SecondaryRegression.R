@@ -157,7 +157,7 @@ for(i in 1:length(compounds)){
 for(i in 1:length(compounds)){
   finaloutput[[6]][[i]]<-as.vector(as.numeric(concentrations[i,]))
 }
-names(finaloutput)<-c("Compounds", "logKi","Top","Bottom","Y-Values","X-values")
+names(finaloutput)<-c("Compounds", "logKi","Top","Bottom","YValues","XValues")
 #jsonoutput<-toJSON(output_assembly, pretty=TRUE, auto_unbox = TRUE)
 jsonoutput<-toJSON(finaloutput, pretty=TRUE, auto_unbox = TRUE)
 write(jsonoutput, paste0(paste0("/path/to/save/",groupID),".json"))
