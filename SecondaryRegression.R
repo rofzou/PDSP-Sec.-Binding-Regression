@@ -151,7 +151,7 @@ finaloutput[[3]]<-output_assembly[[1]][["Top"]]
 finaloutput[[4]]<-output_assembly[[1]][["Bottom"]]
 predictedyvalues<-sapply(output_assembly,"[","Pred Y-Value")
 for(i in 1:length(compounds)){
-  finaloutput[[5]][[i]]<-as.numeric(unlist(df[[i]]))
+  finaloutput[[5]][[i]]<-as.numeric(unlist(predictedyvalues[[i]]))
 }
 #finaloutput[[5]]<-as.numeric(sapply(output_assembly,"[","Pred Y-Value"))
 for(i in 1:length(compounds)){
