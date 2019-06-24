@@ -67,11 +67,11 @@ data_replicates<-as.data.frame(data_replicates)
 data_replicates[,2:13]<-lapply(data_replicates[,2:13], function(x) as.numeric(as.character(x)))
 data_avgcounts<-data_replicates %>% group_by(V1) %>% summarise_all(mean, na.rm=TRUE)
 #Prep assay information from JSON
-curies<-as.integer(jsondf$hot_count)/(2.22*10^12)
-mmols<-curies/as.integer(jsondf$hot_activity)
-hotnM<-mmols*10^6/(as.integer(jsondf$hot_volume)*10^-6)
+curies<-as.numeric(jsondf$hot_count)/(2.22*10^12)
+mmols<-curies/as.numeric(jsondf$hot_activity)
+hotnM<-mmols*10^6/(as.numeric(jsondf$hot_volume)*10^-6)
 #Constant to be used in logKi equation
-Kd<-as.integer(jsondf$dissociation_constant)
+Kd<-as.numeric(jsondf$dissociation_constant)
 kvalue<-log(1+(hotnM/Kd))
 #Prep concentration/X-values from JSON
 concentrations<-as.data.frame(array(as.numeric(jsondf$concentrations), dim = dim(jsondf$concentrations)))
