@@ -76,18 +76,54 @@ Kd<-as.numeric(jsondf$dissociation_constant)
 kvalue<-log(1+(hotnM/Kd))
 #Prep concentration/X-values from JSON
 concentrations<-as.data.frame(array(as.numeric(jsondf$concentrations), dim = dim(jsondf$concentrations)))
+concentrations<-cbind(compounds, concentrations)
+#Check and set concentrations to NA if the corresponding Y value is NA
+for(i in 1:nrow(data_avgcounts)){
+  for(j in 1:ncol(data_avgcounts)){
+    if(is.na(data_avgcounts[i,j]== TRUE)){
+      concentrations[i,j]<-NaN
+    }
+  }
+}
 #Global Regression requires stacking Y values and X values
+#Vectorize all Y values, drop NaN or NA values, and match them with the same X-values.
+Yvals<-setNames(split(data_avgcounts, f = data_avgcounts$V1),
+                  paste0("Y",1:length(compounds)))
+Xvals<-setNames(split(concentrations, f = data_avgcounts$V1),
+                        paste0("X",1:length(compounds)))
+for(i in 1:length(compounds)){
+  Yvals[[i]]<-Filter(function(x)!all(is.na(x)), Yvals[[i]])
+  Xvals[[i]]<-Filter(function(x)!all(is.na(x)), Xvals[[i]])
+}
 #Stack all average counts into a single Y column, same with concentrations into a single X column
-Yavg<-c(t(data_avgcounts[2:13]))
-Xavg<-c(t(concentrations))
+Yavg<-c()
+Xavg<-c()
+for(i in 1:length(compounds)){
+  insertY<-unlist(Yvals[[i]][2:length(Yvals[[i]])])
+  Yavg<-c(Yavg,insertY)
+  insertX<-unlist(Xvals[[i]][2:length(Xvals[[i]])])
+  Xavg<-c(Xavg,insertX)
+}
+#Yavg<c(t(data_replicates)
+#Xavg<-c(t(concentrations))
 #Global regression will require indicator matrices to pair individual Ki's to 
 #their respective data sets. However, for shared parameters this is not needed.
 #We make a giant matrix where each row is going to be a single indicator matrix
 #These matrices are similar to design matrices found in linear regression/ANOVA
-Indicatortable<-matrix(0, nrow = length(compounds), ncol = 12*length(compounds))
-for(i in 1:length(compounds)){
-  Indicatortable[i, (12*i-11):(12*i)]<-1
+Indicatorlist<-list()
+for (i in 1:length(compounds)){
+  Indicatorlist[[i]]<-rep(0, length(Yavg))
 }
+index<-0
+for (i in 1:length(compounds)){
+  indexprev<-index+1
+  index<-index+(length(Yvals[[i]][2,])-1)
+  Indicatorlist[[i]][indexprev:index]<-1
+}
+#Indicatortable<-matrix(0, nrow = length(compounds), ncol = 12*length(compounds))
+#for(i in 1:length(compounds)){
+#  Indicatortable[i, (12*i-11):(12*i)]<-1
+#}
 #Generate Logki Parameter table. First set all ki's to -7. Then add top and bottom
 kiparams<-c()
 startingki<-c()
@@ -97,7 +133,7 @@ for(i in 1:length(compounds)){
 }
 paramslist<-as.list(setNames(startingki, kiparams))
 bot_est<-0
-top_est<-mean(data_avgcounts$V2)
+top_est<-mean(data_avgcounts$V2, na.rm = TRUE)
 paramslist[["Top"]]<-top_est
 paramslist[["Bottom"]]<-bot_est
 #Now we need to insert the correct number of variables into our formula. A huge pain.
@@ -108,11 +144,13 @@ for (i in 1:length(compounds)){
 #Now we can start our predictions. Write the first equation.All 8 parameters.
 getPred<- function(params, xx) {
   (params$Bottom) + ((params$Top-params$Bottom)/
-  (1+(10^(xx-params$logKi1*Indicatortable[1,]-params$logKi2*Indicatortable[2,]-params$logKi3*Indicatortable[3,]
-                                                        -params$logKi4*Indicatortable[4,]-params$logKi5*Indicatortable[5,]
-                                                        -params$logKi6*Indicatortable[6,]-
-                                                        params$logKi7*Indicatortable[7,]
-                                                        -params$logKi8*Indicatortable[8,]-kvalue))))
+  (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                           -params$logKi3*Indicatorlist[[3]]
+                                           -params$logKi4*Indicatorlist[[4]]
+                                           -params$logKi5*Indicatorlist[[5]]
+                                           -params$logKi6*Indicatorlist[[6]]
+                                           -params$logKi7*Indicatorlist[[7]]
+                                           -params$logKi8*Indicatorlist[[8]]-kvalue))))
 }
 #getPred2<- function(params, xx) {
 #  (params$Bottom) + ((params$Top-params$Bottom)/
