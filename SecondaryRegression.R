@@ -177,8 +177,7 @@ spl_fxns<-list()
 output_assembly<-paramslisttotal
 names(output_assembly)<-c(compounds)
 for(i in 1:length(compounds)){
-output[[i]]<-getPredsingle(paramslisttotal[[i]], concentrations[i,])
-spl_fxns[[i]] <- splinefun(concentrations[i,], output[[i]])
+output[[i]]<-getPredsingle(paramslisttotal[[i]], unlist(Xvals[[i]][,2:length(Xvals[[i]])]))
 }
 for(i in 1:length(compounds)){
   output_assembly[[i]][["Pred Y-Value"]]<-output[[i]]
@@ -194,7 +193,7 @@ for(i in 1:length(compounds)){
 }
 #finaloutput[[5]]<-as.numeric(sapply(output_assembly,"[","Pred Y-Value"))
 for(i in 1:length(compounds)){
-  finaloutput[[6]][[i]]<-as.vector(as.numeric(concentrations[i,]))
+  finaloutput[[6]][[i]]<-as.vector(as.numeric(Xvals[[i]][,2:length(Xvals[[i]])]))
 }
 names(finaloutput)<-c("Compounds", "logKi","Top","Bottom","YValues","XValues")
 #jsonoutput<-toJSON(output_assembly, pretty=TRUE, auto_unbox = TRUE)
