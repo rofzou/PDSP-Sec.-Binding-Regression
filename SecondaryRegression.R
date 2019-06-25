@@ -65,7 +65,8 @@ if (is.na(rep_num)== TRUE){
 data_replicates<-as.data.frame(data_replicates)
 #Convert the data columns into numeric and create average values and standard deviation
 data_replicates[,2:13]<-lapply(data_replicates[,2:13], function(x) as.numeric(as.character(x)))
-data_avgcounts<-data_replicates %>% group_by(V1) %>% summarise_all(mean, na.rm=TRUE)
+data_avgcounts<-data_replicates %>% group_by(V1)%>%summarise_all(mean, na.rm=TRUE)%>%
+  arrange(match(V1,c(compounds)), desc(V1))
 #Prep assay information from JSON
 curies<-as.numeric(jsondf$hot_count)/(2.22*10^12)
 mmols<-curies/as.numeric(jsondf$hot_activity)
