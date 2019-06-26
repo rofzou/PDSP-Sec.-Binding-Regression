@@ -5,6 +5,7 @@ library(dplyr)
 library(jsonlite)
 library(arrayhelpers)
 library(abind)
+#library(rlang)
 ##counts<- read.csv("./Example.csv", fileEncoding = "UTF-8-BOM")
 ##Load and derive information from JSON
 args<- commandArgs(TRUE)
@@ -13,6 +14,7 @@ groupID<-args[2]
 #jsondf<-fromJSON("./sample.json")
 jsondf<-fromJSON(json)
 compounds<-jsondf$compounds
+compoundorder<-cbind(compounds, c(1:length(compounds)))
 data_replicates<-jsondf$replicates
 data_outliers<-jsondf$outliers
 col_num<-ncol(data_replicates)
@@ -20,6 +22,8 @@ row_num<-nrow(data_replicates)
 rep_num<-dim(data_replicates)[3]
 ##Create empty array to check for outliers with. Array is either 3D or 2D, but will match data from JSON
 data_replicates_checked<-array(NA, dim=dim(data_replicates))
+##Check for outliers on the outlier grid. If it is an outlier, the data grid has the corresponding value
+##set to NA
 outliercheck<- function(replicates, outliers){
   if (rep_num>0){
   for (i in 1:row_num) {
@@ -49,8 +53,9 @@ outliercheck<- function(replicates, outliers){
   }
 }
 data_replicates_checked<-outliercheck(data_replicates, data_outliers)
-#With outliers set as NA, bind the compound number to the first column in each plate
-data_replicates_cmpd<-abind(array(compounds, replace(dim(data_replicates_checked),2,1)), 
+#With outliers set as NA, bind the compound number to the first column in each plate and replace with numbered
+#order 1-8
+data_replicates_cmpd<-abind(array(compoundorder[,2], replace(dim(data_replicates_checked),2,1)), 
                        data_replicates_checked, along = 2)
 #Arrange the data into a single 2D array depeding on 3D-ness of original array
 data_replicates<-data_replicates_cmpd[,,1]
@@ -63,20 +68,20 @@ if (is.na(rep_num)== TRUE){
   data_replicates<-data_replicates_cmpd[,,1]
 }
 data_replicates<-as.data.frame(data_replicates)
-#Convert the data columns into numeric and create average values and standard deviation
-data_replicates[,2:13]<-lapply(data_replicates[,2:13], function(x) as.numeric(as.character(x)))
+#Convert the data columns into numeric and create average values
+data_replicates[,2:ncol(data_replicates)]<-lapply(data_replicates[,2:ncol(data_replicates)], function(x) as.numeric(as.character(x)))
 data_avgcounts<-data_replicates %>% group_by(V1)%>%summarise_all(mean, na.rm=TRUE)%>%
-  arrange(match(V1,c(compounds)), desc(V1))
-#Prep assay information from JSON
+  arrange(match(V1,c(compoundorder[,2])), desc(V1))
+#Prep assay information from JSON, most importantly the constant used in the equation
 curies<-as.numeric(jsondf$hot_count)/(2.22*10^12)
 mmols<-curies/as.numeric(jsondf$hot_activity)
 hotnM<-mmols*10^6/(as.numeric(jsondf$hot_volume)*10^-6)
-#Constant to be used in logKi equation
+#Constants to be used in logKi equation
 Kd<-as.numeric(jsondf$dissociation_constant)
 kvalue<-log(1+(hotnM/Kd))
 #Prep concentration/X-values from JSON
 concentrations<-as.data.frame(array(as.numeric(jsondf$concentrations), dim = dim(jsondf$concentrations)))
-concentrations<-cbind(compounds, concentrations)
+concentrations<-cbind(compoundorder[,2], concentrations)
 #Check and set concentrations to NA if the corresponding Y value is NA
 for(i in 1:nrow(data_avgcounts)){
   for(j in 1:ncol(data_avgcounts)){
@@ -86,7 +91,8 @@ for(i in 1:nrow(data_avgcounts)){
   }
 }
 #Global Regression requires stacking Y values and X values
-#Vectorize all Y values, drop NaN or NA values, and match them with the same X-values.
+#Vectorize all Y values, drop NaN or NA values, and match them with the same X-values. Drop X-values that
+#correspond to a dropped Y-value.
 Yvals<-setNames(split(data_avgcounts, f = data_avgcounts$V1),
                   paste0("Y",1:length(compounds)))
 Xvals<-setNames(split(concentrations, f = data_avgcounts$V1),
@@ -95,7 +101,7 @@ for(i in 1:length(compounds)){
   Yvals[[i]]<-Filter(function(x)!all(is.na(x)), Yvals[[i]])
   Xvals[[i]]<-Filter(function(x)!all(is.na(x)), Xvals[[i]])
 }
-#Stack all average counts into a single Y column, same with concentrations into a single X column
+#Stack all average counts into a single Y vector, same with concentrations into a single X vector
 Yavg<-c()
 Xavg<-c()
 for(i in 1:length(compounds)){
@@ -108,8 +114,9 @@ for(i in 1:length(compounds)){
 #Xavg<-c(t(concentrations))
 #Global regression will require indicator matrices to pair individual Ki's to 
 #their respective data sets. However, for shared parameters this is not needed.
-#We make a giant matrix where each row is going to be a single indicator matrix
-#These matrices are similar to design matrices found in linear regression/ANOVA
+#We make a giant list where each vector is going to be a single indicator vector of 1's and 0's
+#These vectors are similar to design matrices found in linear regression/ANOVA
+#1 indicates this data set value is for this parameter, while 0 indicates this value is not for this parameter.
 Indicatorlist<-list()
 for (i in 1:length(compounds)){
   Indicatorlist[[i]]<-rep(0, length(Yavg))
@@ -124,7 +131,7 @@ for (i in 1:length(compounds)){
 #for(i in 1:length(compounds)){
 #  Indicatortable[i, (12*i-11):(12*i)]<-1
 #}
-#Generate Logki Parameter table. First set all ki's to -7. Then add top and bottom
+#Generate Logki Parameter table. First set all ki's to -7. Then add top and bottom estimates
 kiparams<-c()
 startingki<-c()
 for(i in 1:length(compounds)){
@@ -137,37 +144,40 @@ top_est<-mean(data_avgcounts$V2, na.rm = TRUE)
 paramslist[["Top"]]<-top_est
 paramslist[["Bottom"]]<-bot_est
 #Now we need to insert the correct number of variables into our formula. A huge pain.
-paramsindics<-c()
-for (i in 1:length(compounds)){
-  paramsindics[i]<-c(paste0("params$logKi",i,"*","Indicatortable[",i,",]"))
-}
-#Now we can start our predictions. Write the first equation.All 8 parameters.
+# paramsindics<-c()
+# for (i in 1:length(compounds)){
+#   paramsindics[i]<-c(paste0("params$logKi",i,"*","Indicatorlist[[",i,",]]"))
+# }
+#Now we can start our predictions. Write the first equation. All 8 parameters.
 getPred<- function(params, xx) {
   (params$Bottom) + ((params$Top-params$Bottom)/
   (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-                                           -params$logKi3*Indicatorlist[[3]]
-                                           -params$logKi4*Indicatorlist[[4]]
-                                           -params$logKi5*Indicatorlist[[5]]
-                                           -params$logKi6*Indicatorlist[[6]]
-                                           -params$logKi7*Indicatorlist[[7]]
-                                           -params$logKi8*Indicatorlist[[8]]-kvalue))))
+                                             -params$logKi3*Indicatorlist[[3]]
+                                             -params$logKi4*Indicatorlist[[4]]
+                                             -params$logKi5*Indicatorlist[[5]]
+                                             -params$logKi6*Indicatorlist[[6]]
+                                             -params$logKi7*Indicatorlist[[7]]
+                                             -params$logKi8*Indicatorlist[[8]]-kvalue))))
 }
-#getPred2<- function(params, xx) {
-#  (params$Bottom) + ((params$Top-params$Bottom)/
-                       #(1+(10^(xx-as.character(paste(paramsindics, collapse="-"))-kvalue))))
-#}
+# subtractionf<-(eval(as.character(paste(paramsindics, collapse="-"))))
+# as.expression((quote(params$Bottom)) + ((quote(params$Top-params$Bottom))/
+#                        (1+(10^(quote(xx)-subtractionf-quote(kvalue))))))
 
+#Create simulated values based on equation and starting estimates.
 simDnoisy <- getPred(paramslist, Xavg)
+#The residual function used to gauage our residuals
 residFun<- function(p, observed, xx) {
   observed - getPred(p,xx)
 }
+#The actual regression function. From the nls.lm package
 nls.out<- nls.lm(paramslist, fn = residFun, observed = Yavg, xx = Xavg)
 #summary(nls.out)
-#Separate all data
+#Grab predicted Y-values using the updated parameters of the equation.
 getPredsingle<- function(params, xx) {
   (params$Bottom) + ((params$Top-params$Bottom)/
   (1+(10^(xx-params$logKi-kvalue))))
 }
+#Compile results.
 paramslisttotal<-list()
 for(i in 1:length(compounds)){
   paramslisttotal[[i]]<-list(logKi=coef(nls.out)[[paste0("logKi",i)]],Top=coef(nls.out)[["Top"]],Bottom=coef(nls.out)[["Bottom"]])
@@ -175,6 +185,7 @@ for(i in 1:length(compounds)){
 output<-list()
 spl_fxns<-list()
 output_assembly<-paramslisttotal
+#Rename output_assembly using compound names. Now we can construct our JSON to be passed back.
 names(output_assembly)<-c(compounds)
 for(i in 1:length(compounds)){
 output[[i]]<-getPredsingle(paramslisttotal[[i]], unlist(Xvals[[i]][,2:length(Xvals[[i]])]))
@@ -195,8 +206,8 @@ for(i in 1:length(compounds)){
 for(i in 1:length(compounds)){
   finaloutput[[6]][[i]]<-as.vector(as.numeric(Xvals[[i]][,2:length(Xvals[[i]])]))
 }
+#Rename our output
 names(finaloutput)<-c("Compounds", "logKi","Top","Bottom","YValues","XValues")
-#jsonoutput<-toJSON(output_assembly, pretty=TRUE, auto_unbox = TRUE)
 jsonoutput<-toJSON(finaloutput, pretty=TRUE, auto_unbox = TRUE)
 write(jsonoutput, paste0(paste0("/path/to/save/",groupID),".json"))
 #p<-ggplot(data.frame(x=x, y=Yavg), mapping = aes(Xavg, Yavg)) + 
