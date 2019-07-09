@@ -78,7 +78,7 @@ mmols<-curies/as.numeric(jsondf$hot_activity)
 hotnM<-mmols*10^6/(as.numeric(jsondf$hot_volume)*10^-6)
 #Constants to be used in logKi equation
 Kd<-as.numeric(jsondf$dissociation_constant)
-kvalue<-log(1+(hotnM/Kd))
+kvalue<-log10(1+(hotnM/Kd))
 #Prep concentration/X-values from JSON
 concentrations<-as.data.frame(array(as.numeric(jsondf$concentrations), dim = dim(jsondf$concentrations)))
 concentrations<-cbind(compoundorder[,2], concentrations)
