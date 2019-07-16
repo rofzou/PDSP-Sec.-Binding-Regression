@@ -148,17 +148,83 @@ paramslist[["Bottom"]]<-bot_est
 # for (i in 1:length(compounds)){
 #   paramsindics[i]<-c(paste0("params$logKi",i,"*","Indicatorlist[[",i,",]]"))
 # }
-#Now we can start our predictions. Write the first equation. All 8 parameters.
-getPred<- function(params, xx) {
-  (params$Bottom) + ((params$Top-params$Bottom)/
-  (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-                                             -params$logKi3*Indicatorlist[[3]]
-                                             -params$logKi4*Indicatorlist[[4]]
-                                             -params$logKi5*Indicatorlist[[5]]
-                                             -params$logKi6*Indicatorlist[[6]]
-                                             -params$logKi7*Indicatorlist[[7]]
-                                             -params$logKi8*Indicatorlist[[8]]-kvalue))))
-}
+#Now we can start our predictions. There can be anywhere form 2-7 compounds so we need to create an equation
+#for each situation. There is probably a way to do this programmatically but I have decided to use
+#a brute force method for now. Bascially, a large if-then loop to match the compounds to the equation.
+if (length(compounds) == 8){
+  getPred<- function(params, xx) {
+    (params$Bottom) + ((params$Top-params$Bottom)/
+                         (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                 -params$logKi3*Indicatorlist[[3]]
+                                 -params$logKi4*Indicatorlist[[4]]
+                                 -params$logKi5*Indicatorlist[[5]]
+                                 -params$logKi6*Indicatorlist[[6]]
+                                 -params$logKi7*Indicatorlist[[7]]
+                                 -params$logKi8*Indicatorlist[[8]]-kvalue))))
+  }
+
+  } else if (length(compounds) == 7){
+    getPred<- function(params, xx) {
+      (params$Bottom) + ((params$Top-params$Bottom)/
+                           (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                   -params$logKi3*Indicatorlist[[3]]
+                                   -params$logKi4*Indicatorlist[[4]]
+                                   -params$logKi5*Indicatorlist[[5]]
+                                   -params$logKi6*Indicatorlist[[6]]
+                                   -params$logKi7*Indicatorlist[[7]]
+                                   -kvalue))))
+    }
+  
+   } else if (length(compounds) == 6){
+      getPred<- function(params, xx) {
+        (params$Bottom) + ((params$Top-params$Bottom)/
+                             (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                     -params$logKi3*Indicatorlist[[3]]
+                                     -params$logKi4*Indicatorlist[[4]]
+                                     -params$logKi5*Indicatorlist[[5]]
+                                     -params$logKi6*Indicatorlist[[6]]
+                                     -kvalue))))
+      }
+    
+  } else if (length(compounds) == 5){
+    getPred<- function(params, xx) {
+      (params$Bottom) + ((params$Top-params$Bottom)/
+                           (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                   -params$logKi3*Indicatorlist[[3]]
+                                   -params$logKi4*Indicatorlist[[4]]
+                                   -params$logKi5*Indicatorlist[[5]]
+                                   -kvalue))))
+    }
+  
+  } else if (length(compounds) == 4){
+    getPred<- function(params, xx) {
+      (params$Bottom) + ((params$Top-params$Bottom)/
+                           (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                   -params$logKi3*Indicatorlist[[3]]
+                                   -params$logKi4*Indicatorlist[[4]]
+                                   -kvalue))))
+    }
+  
+  } else if (length(compounds) == 3){
+    getPred<- function(params, xx) {
+      (params$Bottom) + ((params$Top-params$Bottom)/
+                           (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                   -params$logKi3*Indicatorlist[[3]]
+                                   -kvalue))))
+    }
+  
+  } else if (length(compounds) == 2){
+    getPred<- function(params, xx) {
+      (params$Bottom) + ((params$Top-params$Bottom)/
+                           (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                   -kvalue))))
+    }
+  
+  }else {
+    print("ERROR IN EQUATION GENERATION")
+  }
+
+
 # subtractionf<-(eval(as.character(paste(paramsindics, collapse="-"))))
 # as.expression((quote(params$Bottom)) + ((quote(params$Top-params$Bottom))/
 #                        (1+(10^(quote(xx)-subtractionf-quote(kvalue))))))
