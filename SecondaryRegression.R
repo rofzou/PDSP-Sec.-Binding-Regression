@@ -20,38 +20,61 @@ data_outliers<-jsondf$outliers
 col_num<-ncol(data_replicates)
 row_num<-nrow(data_replicates)
 rep_num<-dim(data_replicates)[3]
+
+Manualdata<-function (manualjsondf){
+  data_replicates_manual<-array(dim = c(3,12,3))
+  for (i in 1:length(manualjsondf)){
+    for (j in 1:nrow((manualjsondf[[i]]))){
+      for(k in 1:ncol((manualjsondf[[i]]))){
+        data_replicates_manual[k,j,i]<-(as.numeric(manualjsondf[[i]][j,k]))
+      }
+    }
+  }
+  return(data_replicates_manual)
+}
+
+if(is.null(rep_num)==TRUE){
+  data_replicates<-Manualdata(data_replicates)
+  data_outliers<-Manualdata(data_outliers)
+  rep_num<-dim(data_replicates)[3]
+}
+
 ##Create empty array to check for outliers with. Array is either 3D or 2D, but will match data from JSON
 data_replicates_checked<-array(NA, dim=dim(data_replicates))
 ##Check for outliers on the outlier grid. If it is an outlier, the data grid has the corresponding value
 ##set to NA
 outliercheck<- function(replicates, outliers){
-  if (rep_num>0){
-  for (i in 1:row_num) {
-    for(j in 1:col_num) {
-      for (k in 1:rep_num){
-      if(outliers[i,j,k] == 0){
-        data_replicates_checked[i,j,k]<-as.numeric(as.character(replicates[i,j,k]))}
-      else{
+  #if (rep_num>0){
+  outliers<-na.omit(outliers)
+  for (i in 1:dim(replicates)[1]) {
+    for(j in 1:dim(replicates)[2]) {
+      for (k in 1:dim(replicates)[3]){
+      if(is.na(outliers[i,j,k])==TRUE){
         data_replicates_checked[i,j,k]<-NA
       }
-    }
-    }
-  }
-    return(data_replicates_checked)
-  }
-  else if (is.na(rep_num) == TRUE){
-    for (i in 1:row_num) {
-      for(j in 1:col_num) {
-          if(outliers[i,j] == 0){
-            data_replicates_checked[i,j]<-as.numeric(as.character(replicates[i,j]))}
-          else{
-            data_replicates_checked[i,j]<-NA
-          }
+      else if(outliers[i,j,k] == 0){
+        data_replicates_checked[i,j,k]<-as.numeric(as.character(replicates[i,j,k]))
       }
-      return(data_replicates_checked)
+      else if(outliers[i,j,k] !=0){
+        data_replicates_checked[i,j,k]<-NA
+      }
+      }
+    }
   }
+  return(data_replicates_checked)
   }
-}
+  # else if (is.na(rep_num) == TRUE){
+  #   for (i in 1:row_num) {
+  #     for(j in 1:col_num) {
+  #         if(outliers[i,j] == 0){
+  #           data_replicates_checked[i,j]<-as.numeric(as.character(replicates[i,j]))}
+  #         else{
+  #           data_replicates_checked[i,j]<-NA
+  #         }
+  #     }
+  #     return(data_replicates_checked)
+  # }
+  # }
 data_replicates_checked<-outliercheck(data_replicates, data_outliers)
 #With outliers set as NA, bind the compound number to the first column in each plate and replace with numbered
 #order 1-8
