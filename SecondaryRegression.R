@@ -20,6 +20,8 @@ data_outliers<-jsondf$outliers
 col_num<-ncol(data_replicates)
 row_num<-nrow(data_replicates)
 rep_num<-dim(data_replicates)[3]
+#Manualplate indicator, 0 by default, gets set to 1 if the data is a manual plate.
+Manualplate<-0
 
 Manualdata<-function (manualjsondf){
   data_replicates_manual<-array(dim = c(3,12,3))
@@ -37,6 +39,9 @@ if(is.null(rep_num)==TRUE){
   data_replicates<-Manualdata(data_replicates)
   data_outliers<-Manualdata(data_outliers)
   rep_num<-dim(data_replicates)[3]
+  col_num<-ncol(data_replicates)
+  row_num<-nrow(data_replicates)
+  Manualplate<-1
 }
 
 ##Create empty array to check for outliers with. Array is either 3D or 2D, but will match data from JSON
@@ -77,9 +82,14 @@ outliercheck<- function(replicates, outliers){
   # }
 data_replicates_checked<-outliercheck(data_replicates, data_outliers)
 #With outliers set as NA, bind the compound number to the first column in each plate and replace with numbered
-#order 1-8
-data_replicates_cmpd<-abind(array(compoundorder[,2], replace(dim(data_replicates_checked),2,1)), 
-                       data_replicates_checked, along = 2)
+#order 1-8. This differs for manual plates, so we check the indicator and decide.
+if(Manualplate == 0){
+  data_replicates_cmpd<-abind(array(compoundorder[,2], replace(dim(data_replicates_checked),2,1)), 
+  data_replicates_checked, along = 2)
+}else if(Manualplate == 1){
+  data_replicates_cmpd<-abind(array(rep(1:nrow(compoundorder), each = 3), dim=c(3,1,rep_num)),
+  data_replicates_checked, along = 2)
+  }
 #Arrange the data into a single 2D array depeding on 3D-ness of original array
 data_replicates<-data_replicates_cmpd[,,1]
 if(rep_num>0){
