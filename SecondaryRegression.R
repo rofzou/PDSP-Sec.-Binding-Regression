@@ -113,6 +113,7 @@ hotnM<-mmols*10^6/(as.numeric(jsondf$hot_volume)*10^-6)
 Kd<-as.numeric(jsondf$dissociation_constant)
 kvalue<-log10(1+(hotnM/Kd))
 #Prep concentration/X-values from JSON
+initialconcentrations<-as.data.frame(array(as.numeric(jsondf$concentrations), dim = dim(jsondf$concentrations)))
 concentrations<-as.data.frame(array(as.numeric(jsondf$concentrations), dim = dim(jsondf$concentrations)))
 concentrations<-cbind(compoundorder[,2], concentrations)
 #Check and set concentrations to NA if the corresponding Y value is NA
@@ -286,12 +287,14 @@ spl_fxns<-list()
 output_assembly<-paramslisttotal
 #Rename output_assembly using compound names. Now we can construct our JSON to be passed back.
 names(output_assembly)<-c(compounds)
+#Get predicted Y-values using initial X-values and new parameters. This is for the graph.
 for(i in 1:length(compounds)){
-output[[i]]<-getPredsingle(paramslisttotal[[i]], unlist(Xvals[[i]][,2:length(Xvals[[i]])]))
+output[[i]]<-getPredsingle(paramslisttotal[[i]], initialconcentrations[i,])
 }
 for(i in 1:length(compounds)){
   output_assembly[[i]][["Pred Y-Value"]]<-output[[i]]
 }
+#Name all of our output list elements
 finaloutput<-vector("list",6)
 finaloutput[[1]]<-c(compounds)
 finaloutput[[2]]<-as.vector(unlist(sapply(output_assembly,"[","logKi"),use.names = FALSE))
@@ -303,7 +306,8 @@ for(i in 1:length(compounds)){
 }
 #finaloutput[[5]]<-as.numeric(sapply(output_assembly,"[","Pred Y-Value"))
 for(i in 1:length(compounds)){
-  finaloutput[[6]][[i]]<-as.vector(as.numeric(Xvals[[i]][,2:length(Xvals[[i]])]))
+  finaloutput[[6]][[i]]<-as.vector(as.numeric(initialconcentrations[i,]))
+  #finaloutput[[6]][[i]]<-as.vector(as.numeric(Xvals[[i]][,2:length(Xvals[[i]])]))
 }
 #Rename our output
 names(finaloutput)<-c("Compounds", "logKi","Top","Bottom","YValues","XValues")
