@@ -20,7 +20,6 @@ data_outliers<-jsondf$outliers
 col_num<-ncol(data_replicates)
 row_num<-nrow(data_replicates)
 rep_num<-dim(data_replicates)[3]
-constraints<-jsondf$constrain
 #Manualplate indicator, 0 by default, gets set to 1 if the data is a manual plate.
 Manualplate<-0
 
@@ -156,51 +155,16 @@ Indicatorlist<-list()
 for (i in 1:length(compounds)){
   Indicatorlist[[i]]<-rep(0, length(Yavg))
 }
-fullindicator<-rep(1, length(Yavg))
 index<-0
 for (i in 1:length(compounds)){
   indexprev<-index+1
   index<-index+(length(Yvals[[i]][2,])-1)
   Indicatorlist[[i]][indexprev:index]<-1
 }
-constraintsBottoms<-as.list(compounds)
-for (i in 1:length(constraints)){
-  if (constraints[i] == 0){
-    constraintsBottoms[[i]][["Bottom"]]<-noquote(paste0(quote(IndivBottom), i))
-    constraintsBottoms[[i]][["Indicatorlist"]]<-noquote(paste0("Indicatorlist[[",i,"]]"))
-    constraintsBottoms[[i]][["Indicator Number"]]<-i
-    fullindicator<-fullindicator-Indicatorlist[[i]]
-  } else if(constraints[i] == 1){
-    constraintsBottoms[[i]][["Bottom"]]<-noquote(quote("GlobalBottom"))
-    constraintsBottoms[[i]][["Indicatorlist"]]<-noquote(quote("fullindicator"))
-    constraintsBottoms[[i]][["Indicator Number"]]<-0
-  }
-}
-Bottomparams<-c()
-for(i in 1:length(constraintsBottoms)){
-  Bottomparams[i]<-constraintsBottoms[[i]][["Bottom"]]
-}
-Botindicatorsparams<-c()
-for(i in 1:length(constraintsBottoms)){
-  Botindicatorsparams[i]<-constraintsBottoms[[i]][["Indicatorlist"]]
-}
-Botindicatorsparams<-unique(Botindicatorsparams)
-Botindicatorsparams<-sort(Botindicatorsparams)
-Bottomparams<-unique(Bottomparams)
-Bottomparams<-sort(Bottomparams)
-BottomparamsxIndics<-c()
-for(i in 1:length(Bottomparams)){
-  BottomparamsxIndics[i]<-paste0("params$",Bottomparams[i],"*",Botindicatorsparams[i])
-}
-paramsxIndics<-c()
-for (i in 1:length(compounds)){
-  paramsxIndics[i]<-noquote(paste0("params$logKi",i,"*Indicatorlist[[",i,"]]"))
-}
-s<-paste0("(",BottomparamsxIndics,collapse = "+",")")
-t<-parse_expr((s))
-r<-paste0(paramsxIndics,collapse = "+")
-q<-parse_expr(r)
-body<-expr((!!t)+((params$Top-(!!t))/(1+10^(xx-(!!q)-kvalue))))
+#Indicatortable<-matrix(0, nrow = length(compounds), ncol = 12*length(compounds))
+#for(i in 1:length(compounds)){
+#  Indicatortable[i, (12*i-11):(12*i)]<-1
+#}
 #Generate Logki Parameter table. First set all ki's to -7. Then add top and bottom estimates
 kiparams<-c()
 startingki<-c()
@@ -212,94 +176,87 @@ paramslist<-as.list(setNames(startingki, kiparams))
 bot_est<-0
 top_est<-mean(data_avgcounts$V2, na.rm = TRUE)
 paramslist[["Top"]]<-top_est
-for (i in 1:length(compounds)){
-  if (constraintsBottoms[[i]][["Indicator Number"]]!=0){
-    paramslist[[paste0(quote(IndivBottom),i)]]<-bot_est
-  }
-  else if (constraintsBottoms[[i]][["Indicator Number"]] == 0){
-    paramslist[["GlobalBottom"]]<-bot_est
-  }
-}
-
+paramslist[["Bottom"]]<-bot_est
 #Now we need to insert the correct number of variables into our formula. A huge pain.
-predbod<-body
-predargs<-alist(params=1, xx=2)
-g<-new_function(predargs, predbod)
+# paramsindics<-c()
+# for (i in 1:length(compounds)){
+#   paramsindics[i]<-c(paste0("params$logKi",i,"*","Indicatorlist[[",i,",]]"))
+# }
 #Now we can start our predictions. There can be anywhere form 2-7 compounds so we need to create an equation
 #for each situation. There is probably a way to do this programmatically but I have decided to use
-# #a brute force method for now. Bascially, a large if-then loop to match the compounds to the equation.
-# if (length(compounds) == 8){
-#   getPred<- function(params, xx) {
-#     (params$Bottom) + ((params$Top-params$Bottom)/
-#                          (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                  -params$logKi3*Indicatorlist[[3]]
-#                                  -params$logKi4*Indicatorlist[[4]]
-#                                  -params$logKi5*Indicatorlist[[5]]
-#                                  -params$logKi6*Indicatorlist[[6]]
-#                                  -params$logKi7*Indicatorlist[[7]]
-#                                  -params$logKi8*Indicatorlist[[8]]-kvalue))))
-#   }
-# 
-#   } else if (length(compounds) == 7){
-#     getPred<- function(params, xx) {
-#       (params$Bottom) + ((params$Top-params$Bottom)/
-#                            (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                    -params$logKi3*Indicatorlist[[3]]
-#                                    -params$logKi4*Indicatorlist[[4]]
-#                                    -params$logKi5*Indicatorlist[[5]]
-#                                    -params$logKi6*Indicatorlist[[6]]
-#                                    -params$logKi7*Indicatorlist[[7]]
-#                                    -kvalue))))
-#     }
-#   
-#    } else if (length(compounds) == 6){
-#       getPred<- function(params, xx) {
-#         (params$Bottom) + ((params$Top-params$Bottom)/
-#                              (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                      -params$logKi3*Indicatorlist[[3]]
-#                                      -params$logKi4*Indicatorlist[[4]]
-#                                      -params$logKi5*Indicatorlist[[5]]
-#                                      -params$logKi6*Indicatorlist[[6]]
-#                                      -kvalue))))
-#       }
-#     
-#   } else if (length(compounds) == 5){
-#     getPred<- function(params, xx) {
-#       (params$Bottom) + ((params$Top-params$Bottom)/
-#                            (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                    -params$logKi3*Indicatorlist[[3]]
-#                                    -params$logKi4*Indicatorlist[[4]]
-#                                    -params$logKi5*Indicatorlist[[5]]
-#                                    -kvalue))))
-#     }
-#   
-#   } else if (length(compounds) == 4){
-#     getPred<- function(params, xx) {
-#       (params$Bottom) + ((params$Top-params$Bottom)/
-#                            (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                    -params$logKi3*Indicatorlist[[3]]
-#                                    -params$logKi4*Indicatorlist[[4]]
-#                                    -kvalue))))
-#     }
-#   
-#   } else if (length(compounds) == 3){
-#     getPred<- function(params, xx) {
-#       (params$Bottom) + ((params$Top-params$Bottom)/
-#                            (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                    -params$logKi3*Indicatorlist[[3]]
-#                                    -kvalue))))
-#     }
-#   
-#   } else if (length(compounds) == 2){
-#     getPred<- function(params, xx) {
-#       (params$Bottom) + ((params$Top-params$Bottom)/
-#                            (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                    -kvalue))))
-#     }
-#   
-#   }else {
-#     print("ERROR IN EQUATION GENERATION")
-#   }
+#a brute force method for now. Bascially, a large if-then loop to match the compounds to the equation.
+if (length(compounds) == 8){
+  getPred<- function(params, xx) {
+    (params$Bottom) + ((params$Top-params$Bottom)/
+                         (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                 -params$logKi3*Indicatorlist[[3]]
+                                 -params$logKi4*Indicatorlist[[4]]
+                                 -params$logKi5*Indicatorlist[[5]]
+                                 -params$logKi6*Indicatorlist[[6]]
+                                 -params$logKi7*Indicatorlist[[7]]
+                                 -params$logKi8*Indicatorlist[[8]]-kvalue))))
+  }
+
+  } else if (length(compounds) == 7){
+    getPred<- function(params, xx) {
+      (params$Bottom) + ((params$Top-params$Bottom)/
+                           (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                   -params$logKi3*Indicatorlist[[3]]
+                                   -params$logKi4*Indicatorlist[[4]]
+                                   -params$logKi5*Indicatorlist[[5]]
+                                   -params$logKi6*Indicatorlist[[6]]
+                                   -params$logKi7*Indicatorlist[[7]]
+                                   -kvalue))))
+    }
+  
+   } else if (length(compounds) == 6){
+      getPred<- function(params, xx) {
+        (params$Bottom) + ((params$Top-params$Bottom)/
+                             (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                     -params$logKi3*Indicatorlist[[3]]
+                                     -params$logKi4*Indicatorlist[[4]]
+                                     -params$logKi5*Indicatorlist[[5]]
+                                     -params$logKi6*Indicatorlist[[6]]
+                                     -kvalue))))
+      }
+    
+  } else if (length(compounds) == 5){
+    getPred<- function(params, xx) {
+      (params$Bottom) + ((params$Top-params$Bottom)/
+                           (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                   -params$logKi3*Indicatorlist[[3]]
+                                   -params$logKi4*Indicatorlist[[4]]
+                                   -params$logKi5*Indicatorlist[[5]]
+                                   -kvalue))))
+    }
+  
+  } else if (length(compounds) == 4){
+    getPred<- function(params, xx) {
+      (params$Bottom) + ((params$Top-params$Bottom)/
+                           (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                   -params$logKi3*Indicatorlist[[3]]
+                                   -params$logKi4*Indicatorlist[[4]]
+                                   -kvalue))))
+    }
+  
+  } else if (length(compounds) == 3){
+    getPred<- function(params, xx) {
+      (params$Bottom) + ((params$Top-params$Bottom)/
+                           (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                   -params$logKi3*Indicatorlist[[3]]
+                                   -kvalue))))
+    }
+  
+  } else if (length(compounds) == 2){
+    getPred<- function(params, xx) {
+      (params$Bottom) + ((params$Top-params$Bottom)/
+                           (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
+                                   -kvalue))))
+    }
+  
+  }else {
+    print("ERROR IN EQUATION GENERATION")
+  }
 
 
 # subtractionf<-(eval(as.character(paste(paramsindics, collapse="-"))))
@@ -307,42 +264,32 @@ g<-new_function(predargs, predbod)
 #                        (1+(10^(quote(xx)-subtractionf-quote(kvalue))))))
 
 #Create simulated values based on equation and starting estimates.
-#simDnoisy <- getPred(paramslist, Xavg)
+simDnoisy <- getPred(paramslist, Xavg)
 #The residual function used to gauage our residuals
-# residFun<- function(p, observed, xx) {
-#   observed - getPred(p,xx)
-# }
 residFun<- function(p, observed, xx) {
-  observed - g(p,xx)
+  observed - getPred(p,xx)
 }
 #The actual regression function. From the nls.lm package
 nls.out<- nls.lm(paramslist, fn = residFun, observed = Yavg, xx = Xavg)
 #summary(nls.out)
+#Grab predicted Y-values using the updated parameters of the equation.
+getPredsingle<- function(params, xx) {
+  (params$Bottom) + ((params$Top-params$Bottom)/
+  (1+(10^(xx-params$logKi-kvalue))))
+}
 #Compile results.
 paramslisttotal<-list()
 for(i in 1:length(compounds)){
-  if (constraints[i] == 0){
-    paramslisttotal[[i]]<-list(logKi=coef(nls.out)[[paste0("logKi",i)]],
-                               Top=coef(nls.out)[["Top"]],Bottom=coef(nls.out)[[paste0("IndivBottom",i)]])
-  } else if(constraints[i] == 1){
-    paramslisttotal[[i]]<-list(logKi=coef(nls.out)[[paste0("logKi",i)]],
-                               Top=coef(nls.out)[["Top"]],Bottom=coef(nls.out)[["GlobalBottom"]])
-  }
+  paramslisttotal[[i]]<-list(logKi=coef(nls.out)[[paste0("logKi",i)]],Top=coef(nls.out)[["Top"]],Bottom=coef(nls.out)[["Bottom"]])
 }
-#Grab predicted Y-values using the updated parameters of the equation.
-getPredsingle<- function(logki, top, bottom, xx) {
-  ((bottom) + ((top-bottom)/
-  (1+(10^(xx-logki-kvalue)))))
-}
-
-output_assembly<-paramslisttotal
 output<-list()
+spl_fxns<-list()
+output_assembly<-paramslisttotal
 #Rename output_assembly using compound names. Now we can construct our JSON to be passed back.
 names(output_assembly)<-c(compounds)
 #Get predicted Y-values using initial X-values and new parameters. This is for the graph.
 for(i in 1:length(compounds)){
-output[[i]]<-getPredsingle(paramslisttotal[[i]][["logKi"]], paramslisttotal[[i]][["Top"]],
-                           paramslisttotal[[i]][["Bottom"]], initialconcentrations[i,])
+output[[i]]<-getPredsingle(paramslisttotal[[i]], initialconcentrations[i,])
 }
 for(i in 1:length(compounds)){
   output_assembly[[i]][["Pred Y-Value"]]<-output[[i]]
