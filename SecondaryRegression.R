@@ -5,13 +5,15 @@ library(dplyr)
 library(jsonlite)
 library(arrayhelpers)
 library(abind)
-#library(rlang)
+library(rlang)
 ##counts<- read.csv("./Example.csv", fileEncoding = "UTF-8-BOM")
 ##Load and derive information from JSON
 args<- commandArgs(TRUE)
 json<-args[1]
 groupID<-args[2]
+#This line loads the information manually so you can test it.
 #jsondf<-fromJSON("./sample.json")
+#We start extracting information from the json here.
 jsondf<-fromJSON(json)
 compounds<-jsondf$compounds
 compoundorder<-cbind(compounds, c(1:length(compounds)))
@@ -23,7 +25,7 @@ rep_num<-dim(data_replicates)[3]
 constraints<-jsondf$constrain
 #Manualplate indicator, 0 by default, gets set to 1 if the data is a manual plate.
 Manualplate<-0
-
+#This function will test rearrange a manual plate's data to conform with the rest of the script.
 Manualdata<-function (manualjsondf){
   data_replicates_manual<-array(dim = c(3,12,3))
   for (i in 1:length(manualjsondf)){
@@ -35,7 +37,8 @@ Manualdata<-function (manualjsondf){
   }
   return(data_replicates_manual)
 }
-
+#This blurb checks for whether or not a plate is a Manual plate and sets the information from before
+#to correspond with that of a manual plate.
 if(is.null(rep_num)==TRUE){
   data_replicates<-Manualdata(data_replicates)
   data_outliers<-Manualdata(data_outliers)
@@ -44,13 +47,11 @@ if(is.null(rep_num)==TRUE){
   row_num<-nrow(data_replicates)
   Manualplate<-1
 }
-
-##Create empty array to check for outliers with. Array is either 3D or 2D, but will match data from JSON
+#Create empty array to check for outliers with. Array is either 3D or 2D, but will match data from JSON
 data_replicates_checked<-array(NA, dim=dim(data_replicates))
-##Check for outliers on the outlier grid. If it is an outlier, the data grid has the corresponding value
-##set to NA
+#Check for outliers on the outlier grid. If it is an outlier, the data grid has the corresponding value
+#set to NA
 outliercheck<- function(replicates, outliers){
-  #if (rep_num>0){
   outliers<-na.omit(outliers)
   for (i in 1:dim(replicates)[1]) {
     for(j in 1:dim(replicates)[2]) {
@@ -69,21 +70,9 @@ outliercheck<- function(replicates, outliers){
   }
   return(data_replicates_checked)
   }
-  # else if (is.na(rep_num) == TRUE){
-  #   for (i in 1:row_num) {
-  #     for(j in 1:col_num) {
-  #         if(outliers[i,j] == 0){
-  #           data_replicates_checked[i,j]<-as.numeric(as.character(replicates[i,j]))}
-  #         else{
-  #           data_replicates_checked[i,j]<-NA
-  #         }
-  #     }
-  #     return(data_replicates_checked)
-  # }
-  # }
 data_replicates_checked<-outliercheck(data_replicates, data_outliers)
 #With outliers set as NA, bind the compound number to the first column in each plate and replace with numbered
-#order 1-8. This differs for manual plates, so we check the indicator and decide.
+#order 1-8. This differs for manual plates, so we check the indicator for a manual plate and decide
 if(Manualplate == 0){
   data_replicates_cmpd<-abind(array(compoundorder[,2], replace(dim(data_replicates_checked),2,1)), 
   data_replicates_checked, along = 2)
@@ -91,7 +80,7 @@ if(Manualplate == 0){
   data_replicates_cmpd<-abind(array(rep(1:nrow(compoundorder), each = 3), dim=c(3,1,rep_num)),
   data_replicates_checked, along = 2)
   }
-#Arrange the data into a single 2D array depeding on 3D-ness of original array
+#Arrange the data into a single 2D array depending on 3D-ness of original array
 data_replicates<-data_replicates_cmpd[,,1]
 if(rep_num>0){
 for (k in 2:rep_num){
@@ -102,18 +91,21 @@ if (is.na(rep_num)== TRUE){
   data_replicates<-data_replicates_cmpd[,,1]
 }
 data_replicates<-as.data.frame(data_replicates)
-#Convert the data columns into numeric and create average values
+#Convert the data columns into numeric and create average values, and place them into a table of the average values.
 data_replicates[,2:ncol(data_replicates)]<-lapply(data_replicates[,2:ncol(data_replicates)], function(x) as.numeric(as.character(x)))
 data_avgcounts<-data_replicates %>% group_by(V1)%>%summarise_all(mean, na.rm=TRUE)%>%
   arrange(match(V1,c(compoundorder[,2])), desc(V1))
-#Prep assay information from JSON, most importantly the constant used in the equation
+#Prep assay information from JSON, most importantly the constant used in the equation. We term this constant
+#as K-value. Someone with sufficient knowledge of the binding equation can tell you how and what it does. 
+#Just know it as a constant that is used in the equation derived from radioactivity of the hot ligand.
 curies<-as.numeric(jsondf$hot_count)/(2.22*10^12)
 mmols<-curies/as.numeric(jsondf$hot_activity)
 hotnM<-mmols*10^6/(as.numeric(jsondf$hot_volume)*10^-6)
-#Constants to be used in logKi equation
 Kd<-as.numeric(jsondf$dissociation_constant)
 kvalue<-log10(1+(hotnM/Kd))
-#Prep concentration/X-values from JSON
+#Prep concentration/X-values from JSON. We keep the old X-values as we do need them all, but we drop
+#any X-values that we can't use for regression. For instance, if a set of Y-values are all removed due to outliers,
+#the corresponding X-value must be removed as well.
 initialconcentrations<-as.data.frame(array(as.numeric(jsondf$concentrations), dim = dim(jsondf$concentrations)))
 concentrations<-as.data.frame(array(as.numeric(jsondf$concentrations), dim = dim(jsondf$concentrations)))
 concentrations<-cbind(compoundorder[,2], concentrations)
@@ -125,7 +117,7 @@ for(i in 1:nrow(data_avgcounts)){
     }
   }
 }
-#Global Regression requires stacking Y values and X values
+#Global Regression requires stacking Y values and X values into one long vector..
 #Vectorize all Y values, drop NaN or NA values, and match them with the same X-values. Drop X-values that
 #correspond to a dropped Y-value.
 Yvals<-setNames(split(data_avgcounts, f = data_avgcounts$V1),
@@ -145,12 +137,11 @@ for(i in 1:length(compounds)){
   insertX<-unlist(Xvals[[i]][2:length(Xvals[[i]])])
   Xavg<-c(Xavg,insertX)
 }
-#Yavg<c(t(data_replicates)
-#Xavg<-c(t(concentrations))
 #Global regression will require indicator matrices to pair individual Ki's to 
-#their respective data sets. However, for shared parameters this is not needed.
+#their respective data sets. However, for shared parameters this is not needed. BUT for shared parameters,
+#any individual parameters must have their indicators removed so they don't conflict.
 #We make a giant list where each vector is going to be a single indicator vector of 1's and 0's
-#These vectors are similar to design matrices found in linear regression/ANOVA
+#These vectors are similar to design matrices found in linear regression/ANOVA design matrices.
 #1 indicates this data set value is for this parameter, while 0 indicates this value is not for this parameter.
 Indicatorlist<-list()
 for (i in 1:length(compounds)){
@@ -163,6 +154,9 @@ for (i in 1:length(compounds)){
   index<-index+(length(Yvals[[i]][2,])-1)
   Indicatorlist[[i]][indexprev:index]<-1
 }
+#Currently, the full indicator is only used for the only parameter that can be individualized, the "Bottom".
+#Here we consider which Bottoms must be constrained, and create an individual parameter for those that are not
+#constrained to be the same. Otherwise we use the Global Bottom.
 constraintsBottoms<-as.list(compounds)
 for (i in 1:length(constraints)){
   if (constraints[i] == 0){
@@ -188,6 +182,10 @@ Botindicatorsparams<-unique(Botindicatorsparams)
 Botindicatorsparams<-sort(Botindicatorsparams)
 Bottomparams<-unique(Bottomparams)
 Bottomparams<-sort(Bottomparams)
+#Now we construct the function. Basically we take all our parameters and put them into the equation 
+#specified in the protocol book for Secondary Binding. We have to create this function programatically because
+#the number of parameters differs across all data sets, so the function's body must be created according to how
+#many parameters are available to be estimated.
 BottomparamsxIndics<-c()
 for(i in 1:length(Bottomparams)){
   BottomparamsxIndics[i]<-paste0("params$",Bottomparams[i],"*",Botindicatorsparams[i])
@@ -196,12 +194,13 @@ paramsxIndics<-c()
 for (i in 1:length(compounds)){
   paramsxIndics[i]<-noquote(paste0("params$logKi",i,"*Indicatorlist[[",i,"]]"))
 }
+#These variables are expressions that are captured by the expr() function. !! is an indicator for unquoting.
 s<-paste0("(",BottomparamsxIndics,collapse = "+",")")
 t<-parse_expr((s))
 r<-paste0(paramsxIndics,collapse = "+")
 q<-parse_expr(r)
 body<-expr((!!t)+((params$Top-(!!t))/(1+10^(xx-(!!q)-kvalue))))
-#Generate Logki Parameter table. First set all ki's to -7. Then add top and bottom estimates
+#Generate Logki Parameter table. First set all ki's to -7. Then add top and bottom estimates for all tops and bottoms.
 kiparams<-c()
 startingki<-c()
 for(i in 1:length(compounds)){
@@ -221,101 +220,20 @@ for (i in 1:length(compounds)){
   }
 }
 
-#Now we need to insert the correct number of variables into our formula. A huge pain.
+#Now we need to insert the correct number of variables into our formula. A huge pain. Earlier we created the 
+#argument list, and body. new_function() is a function that creates a function from a given list of arguments
+#and  a function body.
 predbod<-body
 predargs<-alist(params=1, xx=2)
 g<-new_function(predargs, predbod)
-#Now we can start our predictions. There can be anywhere form 2-7 compounds so we need to create an equation
-#for each situation. There is probably a way to do this programmatically but I have decided to use
-# #a brute force method for now. Bascially, a large if-then loop to match the compounds to the equation.
-# if (length(compounds) == 8){
-#   getPred<- function(params, xx) {
-#     (params$Bottom) + ((params$Top-params$Bottom)/
-#                          (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                  -params$logKi3*Indicatorlist[[3]]
-#                                  -params$logKi4*Indicatorlist[[4]]
-#                                  -params$logKi5*Indicatorlist[[5]]
-#                                  -params$logKi6*Indicatorlist[[6]]
-#                                  -params$logKi7*Indicatorlist[[7]]
-#                                  -params$logKi8*Indicatorlist[[8]]-kvalue))))
-#   }
-# 
-#   } else if (length(compounds) == 7){
-#     getPred<- function(params, xx) {
-#       (params$Bottom) + ((params$Top-params$Bottom)/
-#                            (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                    -params$logKi3*Indicatorlist[[3]]
-#                                    -params$logKi4*Indicatorlist[[4]]
-#                                    -params$logKi5*Indicatorlist[[5]]
-#                                    -params$logKi6*Indicatorlist[[6]]
-#                                    -params$logKi7*Indicatorlist[[7]]
-#                                    -kvalue))))
-#     }
-#   
-#    } else if (length(compounds) == 6){
-#       getPred<- function(params, xx) {
-#         (params$Bottom) + ((params$Top-params$Bottom)/
-#                              (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                      -params$logKi3*Indicatorlist[[3]]
-#                                      -params$logKi4*Indicatorlist[[4]]
-#                                      -params$logKi5*Indicatorlist[[5]]
-#                                      -params$logKi6*Indicatorlist[[6]]
-#                                      -kvalue))))
-#       }
-#     
-#   } else if (length(compounds) == 5){
-#     getPred<- function(params, xx) {
-#       (params$Bottom) + ((params$Top-params$Bottom)/
-#                            (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                    -params$logKi3*Indicatorlist[[3]]
-#                                    -params$logKi4*Indicatorlist[[4]]
-#                                    -params$logKi5*Indicatorlist[[5]]
-#                                    -kvalue))))
-#     }
-#   
-#   } else if (length(compounds) == 4){
-#     getPred<- function(params, xx) {
-#       (params$Bottom) + ((params$Top-params$Bottom)/
-#                            (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                    -params$logKi3*Indicatorlist[[3]]
-#                                    -params$logKi4*Indicatorlist[[4]]
-#                                    -kvalue))))
-#     }
-#   
-#   } else if (length(compounds) == 3){
-#     getPred<- function(params, xx) {
-#       (params$Bottom) + ((params$Top-params$Bottom)/
-#                            (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                    -params$logKi3*Indicatorlist[[3]]
-#                                    -kvalue))))
-#     }
-#   
-#   } else if (length(compounds) == 2){
-#     getPred<- function(params, xx) {
-#       (params$Bottom) + ((params$Top-params$Bottom)/
-#                            (1+(10^(xx-params$logKi1*Indicatorlist[[1]]-params$logKi2*Indicatorlist[[2]]
-#                                    -kvalue))))
-#     }
-#   
-#   }else {
-#     print("ERROR IN EQUATION GENERATION")
-#   }
-
-
-# subtractionf<-(eval(as.character(paste(paramsindics, collapse="-"))))
-# as.expression((quote(params$Bottom)) + ((quote(params$Top-params$Bottom))/
-#                        (1+(10^(quote(xx)-subtractionf-quote(kvalue))))))
-
 #Create simulated values based on equation and starting estimates.
-#simDnoisy <- getPred(paramslist, Xavg)
+#simDnoisy <- g(paramslist, Xavg)
 #The residual function used to gauage our residuals
-# residFun<- function(p, observed, xx) {
-#   observed - getPred(p,xx)
-# }
 residFun<- function(p, observed, xx) {
   observed - g(p,xx)
 }
-#The actual regression function. From the nls.lm package
+#The actual regression function. Literally one line. From the nls.lm package. It needs a list of parameters
+#to be estimated, a residual function, a list of observations and corresponding X-values.
 nls.out<- nls.lm(paramslist, fn = residFun, observed = Yavg, xx = Xavg)
 #summary(nls.out)
 #Compile results.
